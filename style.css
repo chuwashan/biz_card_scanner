@@ -1,0 +1,528 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 0;
+    color: #333;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+}
+
+/* ヘッダー */
+header {
+    background: #4285f4;
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+header h1 {
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.icon-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.icon-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+/* 設定パネル */
+.settings-panel {
+    background: white;
+    padding: 20px;
+    border-bottom: 2px solid #e0e0e0;
+    animation: slideDown 0.3s ease-out;
+}
+
+.settings-panel.hidden {
+    display: none;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.settings-panel h2 {
+    margin-bottom: 15px;
+    color: #4285f4;
+    font-size: 20px;
+}
+
+/* メインコンテンツ */
+main {
+    padding: 20px;
+}
+
+.section {
+    margin-bottom: 30px;
+}
+
+.section.hidden {
+    display: none;
+}
+
+/* カメラセクション */
+.camera-container {
+    text-align: center;
+}
+
+.capture-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.capture-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 20px 40px;
+    font-size: 18px;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    font-weight: 600;
+}
+
+.capture-btn.secondary {
+    background: linear-gradient(135deg, #34a853 0%, #2d8e47 100%);
+    box-shadow: 0 4px 15px rgba(52, 168, 83, 0.4);
+}
+
+.capture-btn.tertiary {
+    background: linear-gradient(135deg, #fbbc04 0%, #f9ab00 100%);
+    box-shadow: 0 4px 15px rgba(251, 188, 4, 0.4);
+}
+
+.capture-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.capture-btn.secondary:hover {
+    box-shadow: 0 6px 20px rgba(52, 168, 83, 0.6);
+}
+
+.capture-btn.tertiary:hover {
+    box-shadow: 0 6px 20px rgba(251, 188, 4, 0.6);
+}
+
+.capture-btn:active {
+    transform: translateY(0);
+}
+
+/* カメラストリーム */
+.camera-stream-container {
+    margin: 20px 0;
+}
+
+.camera-stream-container video {
+    width: 100%;
+    max-height: 500px;
+    border-radius: 10px;
+    background: #000;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.camera-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+}
+
+.preview-container {
+    margin-top: 20px;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.preview-container img {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    background: #f5f5f5;
+}
+
+/* ローディング */
+.loading {
+    text-align: center;
+    padding: 40px 0;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #4285f4;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading p {
+    color: #666;
+    font-size: 16px;
+}
+
+.progress-text {
+    margin-top: 10px;
+    color: #4285f4;
+    font-weight: 600;
+    font-size: 18px;
+}
+
+/* フォーム */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+    font-size: 14px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+    background: white;
+    font-family: inherit;
+}
+
+.form-group textarea {
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #4285f4;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: #999;
+    font-size: 12px;
+}
+
+.form-group small a {
+    color: #4285f4;
+    text-decoration: none;
+}
+
+/* 結果フォーム */
+.result-form {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.result-form h2 {
+    color: #4285f4;
+    margin-bottom: 20px;
+}
+
+/* ボタン */
+.button-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.btn {
+    flex: 1;
+    min-width: 120px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background: #4285f4;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #3367d6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);
+}
+
+.btn-success {
+    background: #34a853;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #2d8e47;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(52, 168, 83, 0.3);
+}
+
+.btn-secondary {
+    background: #e0e0e0;
+    color: #555;
+}
+
+.btn-secondary:hover {
+    background: #d0d0d0;
+}
+
+.btn-danger {
+    background: #ea4335;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #d33426;
+}
+
+.btn-warning {
+    background: #fbbc04;
+    color: #333;
+    font-weight: 700;
+}
+
+.btn-warning:hover {
+    background: #f9ab00;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(251, 188, 4, 0.3);
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 13px;
+    min-width: auto;
+}
+
+/* バッチリスト */
+.batch-list {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.batch-item {
+    background: white;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s;
+}
+
+.batch-item:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.batch-item-content {
+    flex: 1;
+}
+
+.batch-item-content h3 {
+    color: #fbbc04;
+    margin-bottom: 5px;
+    font-size: 16px;
+}
+
+.batch-item-content p {
+    color: #666;
+    font-size: 14px;
+    margin: 3px 0;
+}
+
+.batch-item-delete {
+    background: #ea4335;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s;
+}
+
+.batch-item-delete:hover {
+    background: #d33426;
+    transform: scale(1.1);
+}
+
+/* 履歴 */
+.history-list {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.history-item {
+    background: white;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.history-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.history-item h3 {
+    color: #4285f4;
+    margin-bottom: 5px;
+    font-size: 16px;
+}
+
+.history-item p {
+    color: #666;
+    font-size: 14px;
+    margin: 3px 0;
+}
+
+.history-item small {
+    color: #999;
+    font-size: 12px;
+}
+
+.empty-message {
+    text-align: center;
+    color: #999;
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
+.token-usage {
+    margin: 10px 0 15px;
+    font-size: 13px;
+    color: #666;
+}
+
+/* フッター */
+footer {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+    font-size: 12px;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* レスポンシブ */
+@media (max-width: 600px) {
+    .container {
+        box-shadow: none;
+    }
+
+    header h1 {
+        font-size: 20px;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+
+    .btn {
+        width: 100%;
+    }
+}
+
+/* アニメーション */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ユーティリティ */
+.hidden {
+    display: none !important;
+}
+
+.status-text {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4285f4;
+}

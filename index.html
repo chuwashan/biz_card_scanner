@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4285f4">
+    <title>名刺スキャナー</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <header>
+            <h1>📇 名刺スキャナー</h1>
+            <button id="settingsBtn" class="icon-btn">⚙️</button>
+        </header>
+
+        <!-- 設定パネル -->
+        <div id="settingsPanel" class="settings-panel hidden">
+            <h2>設定</h2>
+            <div class="form-group">
+                <label for="apiKey">Gemini API キー:</label>
+                <input type="password" id="apiKey" placeholder="AIzaSy...">
+                <small>無料で取得: <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a></small>
+            </div>
+            <div class="form-group">
+                <label>Google Sheets 連携</label>
+                <button id="connectGoogleBtn" class="btn btn-primary">Googleで接続</button>
+                <p id="googleStatus" class="status-text">未接続</p>
+                <small>シートに直接書き込みできます（初回は認証が必要）。</small>
+            </div>
+            <div class="form-group">
+                <label for="spreadsheetId">スプレッドシートURL / ID</label>
+                <input type="text" id="spreadsheetId" placeholder="https://docs.google.com/spreadsheets/d/...">
+                <button id="loadSheetsBtn" class="btn btn-secondary btn-sm" type="button">シート一覧を取得</button>
+            </div>
+            <div class="form-group">
+                <label for="sheetSelect">書き込み先シート</label>
+                <select id="sheetSelect">
+                    <option value="">シートを選択</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <button id="saveSettings" class="btn btn-primary">保存</button>
+                <button id="closeSettings" class="btn btn-secondary">閉じる</button>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <main id="mainContent">
+            <!-- カメラセクション -->
+            <section id="cameraSection" class="section">
+                <div class="camera-container">
+                    <!-- カメラストリーム（PC用） -->
+                    <div id="cameraStreamContainer" class="camera-stream-container hidden">
+                        <video id="cameraStream" autoplay playsinline></video>
+                        <canvas id="canvas" style="display: none;"></canvas>
+                        <div class="camera-controls">
+                            <button id="takePictureBtn" class="btn btn-primary">📸 撮影</button>
+                            <button id="closeCameraBtn" class="btn btn-secondary">✖ 閉じる</button>
+                        </div>
+                    </div>
+
+                    <!-- ファイル入力（スマホ用） -->
+                    <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+
+                    <!-- フォルダ入力（PC用） -->
+                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+
+                    <!-- 選択ボタン -->
+                    <div id="captureButtons" class="capture-buttons">
+                        <button id="openCameraBtn" class="capture-btn">
+                            📷 カメラで撮影
+                        </button>
+                        <button id="selectFileBtn" class="capture-btn secondary">
+                            🖼️ ファイルを選択
+                        </button>
+                        <button id="selectFolderBtn" class="capture-btn tertiary">
+                            📁 フォルダを一括スキャン
+                        </button>
+                        <button id="autoScanToggleBtn" class="capture-btn secondary">
+                            ⚡ 自動スキャン: OFF
+                        </button>
+                    </div>
+
+                    <!-- プレビュー -->
+                    <div id="previewContainer" class="preview-container hidden">
+                        <img id="preview" alt="プレビュー">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 処理中 -->
+            <section id="loadingSection" class="section hidden">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p id="loadingText">解析中...</p>
+                    <p id="progressText" class="progress-text hidden"></p>
+                </div>
+            </section>
+
+            <!-- 結果セクション -->
+            <section id="resultSection" class="section hidden">
+                <h2>📋 抽出結果</h2>
+                <p id="tokenUsage" class="token-usage hidden"></p>
+                <div class="result-form">
+                    <div class="form-group">
+                        <label>属性</label>
+                        <select id="type">
+                            <option value="法人">法人</option>
+                            <option value="個人">個人</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>氏名</label>
+                        <input type="text" id="name" placeholder="山田 太郎">
+                    </div>
+                    <div class="form-group">
+                        <label>法人名</label>
+                        <input type="text" id="company" placeholder="株式会社〇〇">
+                    </div>
+                    <div class="form-group">
+                        <label>部署・役職</label>
+                        <input type="text" id="position" placeholder="営業部 部長">
+                    </div>
+                    <div class="form-group">
+                        <label>電話番号</label>
+                        <input type="tel" id="phone" placeholder="03-1234-5678">
+                    </div>
+                    <div class="form-group">
+                        <label>メールアドレス</label>
+                        <input type="email" id="email" placeholder="yamada@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>HP</label>
+                        <input type="url" id="website" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>タグ</label>
+                        <input type="text" id="tag" placeholder="紹介、検討中など">
+                    </div>
+                    <div class="form-group">
+                        <label>初回接触日</label>
+                        <input type="date" id="contactDate">
+                    </div>
+                    <div class="form-group">
+                        <label>接触方法</label>
+                        <input type="text" id="contactMethod" placeholder="紹介、修理法人会入会など">
+                    </div>
+                    <div class="form-group">
+                        <label>紹介者</label>
+                        <input type="text" id="referrer" placeholder="紹介者名">
+                    </div>
+                    <div class="form-group">
+                        <label>ステータス</label>
+                        <select id="status">
+                            <option value="進行中">進行中</option>
+                            <option value="名刺交換">名刺交換</option>
+                            <option value="検討中">検討中</option>
+                            <option value="受注">受注</option>
+                            <option value="失注">失注</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>担当者</label>
+                        <input type="text" id="assignee" placeholder="担当者名">
+                    </div>
+                    <div class="form-group">
+                        <label>ネクストアクション（初回連絡メッセージ）</label>
+                        <textarea id="nextAction" rows="5" placeholder="LINEやメッセンジャーで送る初回連絡メッセージ"></textarea>
+                        <button id="copyMessageBtn" class="btn btn-secondary btn-sm" style="margin-top: 8px;">📋 メッセージをコピー</button>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="addToBatchBtn" class="btn btn-warning">📦 追加して次へ</button>
+                    <button id="skipAfterScanBtn" class="btn btn-secondary">⏭️ スキップして次へ</button>
+                </div>
+                <div class="button-group">
+                    <button id="copyCsvBtn" class="btn btn-success">📋 1件CSVコピー</button>
+                    <button id="downloadCsvBtn" class="btn btn-primary">📥 1件CSV出力</button>
+                    <button id="writeSheetBtn" class="btn btn-warning">シートに追加</button>
+                    <button id="retakeBtn" class="btn btn-secondary">🔄 再撮影</button>
+                </div>
+            </section>
+
+            <!-- バッチ処理セクション -->
+            <section id="batchSection" class="section">
+                <h2>📦 一時保存データ</h2>
+                <div id="batchList" class="batch-list">
+                    <p class="empty-message">まだ一時保存されたデータがありません</p>
+                </div>
+                <div class="button-group">
+                    <button id="batchCopyCsvBtn" class="btn btn-success hidden">📋 まとめてCSVコピー</button>
+                    <button id="batchDownloadCsvBtn" class="btn btn-primary hidden">📥 まとめてCSV出力</button>
+                    <button id="batchWriteSheetBtn" class="btn btn-warning hidden">まとめてシートに追加</button>
+                    <button id="clearBatchBtn" class="btn btn-danger hidden">🗑️ 一時保存クリア</button>
+                </div>
+            </section>
+
+            <!-- 履歴セクション -->
+            <section id="historySection" class="section">
+                <h2>📚 スキャン履歴</h2>
+                <div id="historyList" class="history-list">
+                    <p class="empty-message">まだスキャンした名刺がありません</p>
+                </div>
+                <button id="clearHistoryBtn" class="btn btn-danger hidden">履歴をクリア</button>
+            </section>
+        </main>
+
+        <!-- フッター -->
+        <footer>
+            <p>Powered by Gemini API</p>
+        </footer>
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
