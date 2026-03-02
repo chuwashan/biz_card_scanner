@@ -46,6 +46,10 @@
                 <button id="saveSettings" class="btn btn-primary">保存</button>
                 <button id="closeSettings" class="btn btn-secondary">閉じる</button>
             </div>
+            <div class="form-group">
+                <button id="reloadAppBtn" class="btn btn-secondary" style="width:100%;">🔄 アプリを最新版に更新</button>
+                <small>設定はそのまま保持されます。GitHubへのpush後に使用してください。</small>
+            </div>
         </div>
 
         <!-- メインコンテンツ -->
@@ -101,6 +105,7 @@
                     <div class="spinner"></div>
                     <p id="loadingText">解析中...</p>
                     <p id="progressText" class="progress-text hidden"></p>
+                    <button id="cancelScanBtn" class="btn btn-secondary cancel-scan-btn">⬛ キャンセル</button>
                 </div>
             </section>
 

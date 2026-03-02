@@ -19,10 +19,13 @@ class BusinessCardScanner {
         // ガイドフレーム検出用
         this.guideDetectCanvas = null;
         this.guideDetectContext = null;
-        this.guideState = 'none';       // 'none' | 'detected' | 'capturing'
+        this.guideState = 'none';       // 'none' | 'detected' | 'countdown' | 'capturing'
         this.guideStableCount = 0;
         this.guideLastFrame = null;
         this.guideCooldownUntil = 0;
+        this.captureCountdownUntil = 0; // カウントダウン終了予定時刻
+        // OCRキャンセル用
+        this.abortController = null;
         // クイック確認用
         this.quickConfirmTimerId = null;
         this.quickConfirmSecondsLeft = 5;
@@ -118,6 +121,8 @@ class BusinessCardScanner {
 
         // ガイドオーバーレイ
         this.guideOverlay = document.getElementById('guideOverlay');
+        this.cancelScanBtn = document.getElementById('cancelScanBtn');
+        this.reloadAppBtn  = document.getElementById('reloadAppBtn');
 
         // クイック確認パネル
         this.quickConfirmSection  = document.getElementById('quickConfirmSection');
@@ -191,6 +196,16 @@ class BusinessCardScanner {
         }
         if (this.quickEditBtn) {
             this.quickEditBtn.addEventListener('click', () => this.openFullForm());
+        }
+
+        // OCRキャンセル
+        if (this.cancelScanBtn) {
+            this.cancelScanBtn.addEventListener('click', () => this.cancelScan());
+        }
+
+        // PWAアップデートリロード
+        if (this.reloadAppBtn) {
+            this.reloadAppBtn.addEventListener('click', () => this.reloadApp());
         }
     }
 
@@ -430,6 +445,7 @@ class BusinessCardScanner {
         const colors = {
             none:      { border: '#aaaaaa', label: '名刺を枠内に合わせてください' },
             detected:  { border: '#ffd600', label: 'そのまま静止してください...' },
+            countdown: { border: '#ff6d00', label: '撮影まで...' },
             capturing: { border: '#00c853', label: '撮影します!' }
         };
         const c = colors[this.guideState] || colors.none;
@@ -472,6 +488,18 @@ class BusinessCardScanner {
         ctx.shadowColor = 'rgba(0,0,0,0.9)';
         ctx.shadowBlur = 5;
         ctx.fillText(c.label, W / 2, rect.y - fontSize * 0.4);
+
+        // countdown 状態のとき残り秒数を枠中央に大きく表示
+        if (this.guideState === 'countdown' && this.captureCountdownUntil > 0) {
+            const remaining = Math.ceil((this.captureCountdownUntil - Date.now()) / 1000);
+            if (remaining > 0) {
+                const numSize = Math.max(40, Math.min(rect.w, rect.h) * 0.35);
+                ctx.font = `bold ${numSize}px sans-serif`;
+                ctx.fillStyle = '#ff6d00';
+                ctx.shadowBlur = 8;
+                ctx.fillText(String(remaining), W / 2, rect.y + rect.h / 2 + numSize * 0.35);
+            }
+        }
         ctx.shadowBlur = 0;
     }
 
@@ -548,21 +576,35 @@ class BusinessCardScanner {
         let newState;
         if (!cardPresent) {
             newState = 'none';
+            this.captureCountdownUntil = 0;  // カード離れたらカウントダウンリセット
         } else if (this.guideStableCount < STABLE_FRAMES) {
             newState = 'detected';
+            this.captureCountdownUntil = 0;
         } else {
-            newState = 'capturing';
+            // カウントダウン開始（まだ開始していなければ）
+            if (this.captureCountdownUntil === 0) {
+                this.captureCountdownUntil = Date.now() + 2000; // 2秒カウントダウン
+            }
+            const remaining = this.captureCountdownUntil - Date.now();
+            newState = remaining > 0 ? 'countdown' : 'capturing';
         }
 
-        // 状態変化時のみ再描画（パフォーマンス最適化）
-        if (newState !== this.guideState) {
-            this.guideState = newState;
-            this.drawGuideFrame();
+        // countdown中でもカードが動いたらリセット
+        if (!motionStopped && this.guideState === 'countdown') {
+            newState = 'detected';
+            this.captureCountdownUntil = 0;
+            this.guideStableCount = 0;
         }
+
+        // 状態変化 or countdown中は毎フレーム再描画（数字更新のため）
+        const needsRedraw = newState !== this.guideState || newState === 'countdown';
+        this.guideState = newState;
+        if (needsRedraw) this.drawGuideFrame();
 
         // 撮影トリガー
         if (this.guideState === 'capturing' && !this.isAnalyzing) {
             this.guideStableCount = 0;
+            this.captureCountdownUntil = 0;
             this.guideCooldownUntil = Date.now() + 4000;
             this.playBeep();
             this.takePicture();
@@ -1038,6 +1080,7 @@ class BusinessCardScanner {
 
     async analyzeImage(file) {
         this.isAnalyzing = true;
+        this.abortController = new AbortController();
         try {
             // ローディング表示
             this.showSection('loading');
@@ -1045,7 +1088,7 @@ class BusinessCardScanner {
             // Gemini APIで解析
             const api = getGeminiAPI();
             const processedFile = await this.prepareImageFile(file);
-            const result = await api.analyzeBusinessCard(processedFile);
+            const result = await api.analyzeBusinessCard(processedFile, this.abortController.signal);
 
             // 結果をフォームに反映
             this.fields.type.value = result.type;
@@ -1076,11 +1119,17 @@ class BusinessCardScanner {
             }
 
         } catch (error) {
-            console.error('Analysis error:', error);
-            this.showNotification(`❌ ${error.message}`, 'error');
-            this.showSection('camera');
+            if (error.name === 'AbortError') {
+                // キャンセルされた場合はカメラ画面に戻るだけ
+                this.showSection('camera');
+            } else {
+                console.error('Analysis error:', error);
+                this.showNotification(`❌ ${error.message}`, 'error');
+                this.showSection('camera');
+            }
         }
         this.isAnalyzing = false;
+        this.abortController = null;
     }
 
     showSection(sectionName) {
@@ -1348,6 +1397,27 @@ class BusinessCardScanner {
         this.previewContainer.classList.add('hidden');
         this.closeCamera();
         this.showSection('camera');
+    }
+
+    // OCR解析をキャンセル
+    cancelScan() {
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        this.isAnalyzing = false;
+        this.showSection('camera');
+        if (this.autoScanEnabled) {
+            setTimeout(() => this.openCamera(), 200);
+        }
+    }
+
+    // PWA更新リロード（設定はlocalStorageに残る）
+    async reloadApp() {
+        if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) await reg.update();
+        }
+        window.location.reload();
     }
 
     // クイック確認パネルを表示

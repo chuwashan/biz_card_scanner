@@ -33,7 +33,7 @@ class GeminiAPI {
     /**
      * 名刺画像を解析してデータを抽出
      */
-    async analyzeBusinessCard(imageFile) {
+    async analyzeBusinessCard(imageFile, signal) {
         if (!this.apiKey) {
             throw new Error('Gemini APIキーが設定されていません。設定パネルから設定してください。');
         }
@@ -46,6 +46,7 @@ class GeminiAPI {
             // Gemini APIにリクエスト
             const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
                 method: 'POST',
+                signal: signal || null,
                 headers: {
                     'Content-Type': 'application/json',
                 },
