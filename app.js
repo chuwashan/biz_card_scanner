@@ -984,12 +984,6 @@ class BusinessCardScanner {
         const contactOk = await this.appendRowsToSheet(spreadsheetId, sheetName, [contactRow], { silentSuccess: true });
         if (!contactOk) return;
 
-        const hasNextAction = !!(data.nextAction && data.nextAction.trim());
-        if (!hasNextAction) {
-            this.showNotification('担当者シートに追加しました', 'success');
-            return;
-        }
-
         const activityRow = this.buildActivityLogRow(data);
         const activityOk = await this.appendRowsToSheet(spreadsheetId, '活動ログ', [activityRow], { silentSuccess: true, silentError: true });
 
@@ -1012,8 +1006,15 @@ class BusinessCardScanner {
         const { spreadsheetId, sheetName } = selection;
         const rows = this.batchData.map(data => this.buildSheetRow(data));
         const ok = await this.appendRowsToSheet(spreadsheetId, sheetName, rows, { silentSuccess: true });
-        if (ok) {
-            this.showNotification(`${this.batchData.length}件をシートに追加しました`, 'success');
+        if (!ok) return;
+
+        const activityRows = this.batchData.map(data => this.buildActivityLogRow(data));
+        const activityOk = await this.appendRowsToSheet(spreadsheetId, '活動ログ', activityRows, { silentSuccess: true, silentError: true });
+
+        if (activityOk) {
+            this.showNotification(`${this.batchData.length}件を担当者シートと活動ログに追加しました`, 'success');
+        } else {
+            this.showNotification(`${this.batchData.length}件を担当者シートに追加しました（活動ログへの追加に失敗）`, 'warning');
         }
     }
 
