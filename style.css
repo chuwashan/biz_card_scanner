@@ -526,3 +526,161 @@ footer {
     font-weight: 600;
     color: #4285f4;
 }
+
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+    pointer-events: auto;
+    max-width: 320px;
+    text-align: center;
+}
+
+.toast.success { background: #34a853; }
+.toast.error { background: #ea4335; }
+.toast.warning { background: #fbbc04; color: #333; }
+.toast.info { background: #4285f4; }
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* ===== ガイドフレームオーバーレイ ===== */
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    display: block;
+}
+
+.video-wrapper video {
+    display: block;
+    width: 100%;
+}
+
+.guide-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* ===== クイック確認パネル ===== */
+.quick-confirm-panel {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.quick-confirm-thumb-wrap {
+    width: 100%;
+    max-height: 180px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #f0f0f0;
+}
+
+.quick-confirm-thumb {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+}
+
+.quick-confirm-info {
+    width: 100%;
+    text-align: center;
+}
+
+.quick-confirm-label {
+    font-size: 12px;
+    color: #999;
+    margin: 0 0 6px;
+}
+
+.quick-confirm-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: #333;
+    margin: 0 0 4px;
+}
+
+.quick-confirm-company {
+    font-size: 16px;
+    color: #555;
+    margin: 0;
+}
+
+.quick-confirm-countdown {
+    font-size: 14px;
+    color: #4285f4;
+    font-weight: 600;
+}
+
+.quick-confirm-countdown span {
+    font-size: 28px;
+    font-weight: 800;
+    display: inline-block;
+    min-width: 36px;
+    text-align: center;
+    color: #ea4335;
+}
+
+.quick-confirm-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.quick-confirm-main-btn {
+    width: 100%;
+    padding: 18px;
+    font-size: 18px;
+    border-radius: 12px;
+}
+
+.quick-edit-btn {
+    width: 100%;
+    font-size: 14px;
+    background: none;
+    border: 1px solid #ccc;
+    color: #666;
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+}
+
+.quick-edit-btn:hover {
+    background: #f5f5f5;
+}

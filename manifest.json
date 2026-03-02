@@ -1,12 +1,28 @@
 {
-  "name": "名刺スキャナー",
-  "short_name": "名刺スキャナー",
-  "description": "スマホで名刺を撮影してスプレッドシートに出力",
+  "name": "名刺スキャナー CRM",
+  "short_name": "名刺CRM",
+  "description": "名刺をスキャンしてGoogleシートに即時登録",
   "start_url": "./index.html",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#4285f4",
-  "orientation": "portrait",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "shortcuts": [
+    {
+      "name": "カメラで撮影",
+      "url": "./index.html#camera",
+      "icons": [
+        {
+          "src": "icons/camera-96.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "icon-192.png",

@@ -5,7 +5,7 @@ class BusinessCardScanner {
         this.currentImageFile = null;
         this.stream = null;
         this.history = this.loadHistory();
-        this.batchData = []; // 一時保存用の配列
+        this.batchData = this.loadBatch(); // 一時保存用の配列（localStorage永続化）
         this.googleAccessToken = null;
         this.googleTokenExpiresAt = 0;
         this.tokenClient = null;
@@ -16,6 +16,16 @@ class BusinessCardScanner {
         this.autoScanStableCount = 0;
         this.autoScanLastCaptureAt = 0;
         this.isAnalyzing = false;
+        // ガイドフレーム検出用
+        this.guideDetectCanvas = null;
+        this.guideDetectContext = null;
+        this.guideState = 'none';       // 'none' | 'detected' | 'capturing'
+        this.guideStableCount = 0;
+        this.guideLastFrame = null;
+        this.guideCooldownUntil = 0;
+        // クイック確認用
+        this.quickConfirmTimerId = null;
+        this.quickConfirmSecondsLeft = 5;
         this.initElements();
         this.updateAutoScanButton();
         this.initEventListeners();
@@ -93,6 +103,7 @@ class BusinessCardScanner {
             phone: document.getElementById('phone'),
             email: document.getElementById('email'),
             website: document.getElementById('website'),
+            address: document.getElementById('address'),
             tag: document.getElementById('tag'),
             contactDate: document.getElementById('contactDate'),
             contactMethod: document.getElementById('contactMethod'),
@@ -104,6 +115,18 @@ class BusinessCardScanner {
 
         this.copyMessageBtn = document.getElementById('copyMessageBtn');
         this.historyList = document.getElementById('historyList');
+
+        // ガイドオーバーレイ
+        this.guideOverlay = document.getElementById('guideOverlay');
+
+        // クイック確認パネル
+        this.quickConfirmSection  = document.getElementById('quickConfirmSection');
+        this.quickConfirmThumb    = document.getElementById('quickConfirmThumb');
+        this.quickConfirmName     = document.getElementById('quickConfirmName');
+        this.quickConfirmCompany  = document.getElementById('quickConfirmCompany');
+        this.quickConfirmCountdown = document.getElementById('quickConfirmCountdown');
+        this.quickConfirmBtn      = document.getElementById('quickConfirmBtn');
+        this.quickEditBtn         = document.getElementById('quickEditBtn');
     }
 
     initEventListeners() {
@@ -161,6 +184,14 @@ class BusinessCardScanner {
         if (this.autoScanToggleBtn) {
             this.autoScanToggleBtn.addEventListener('click', () => this.toggleAutoScan());
         }
+
+        // クイック確認パネル
+        if (this.quickConfirmBtn) {
+            this.quickConfirmBtn.addEventListener('click', () => this.quickConfirmAndNext());
+        }
+        if (this.quickEditBtn) {
+            this.quickEditBtn.addEventListener('click', () => this.openFullForm());
+        }
     }
 
     async openCamera() {
@@ -172,6 +203,18 @@ class BusinessCardScanner {
             this.cameraStream.srcObject = this.stream;
             this.captureButtons.classList.add('hidden');
             this.cameraStreamContainer.classList.remove('hidden');
+
+            // ガイドフレーム状態をリセット
+            this.guideState = 'none';
+            this.guideStableCount = 0;
+            this.guideLastFrame = null;
+            this.guideCooldownUntil = 0;
+
+            // ビデオ解像度確定後にガイドオーバーレイを初期化
+            this.cameraStream.addEventListener('loadedmetadata', () => {
+                this.resizeGuideOverlay();
+            }, { once: true });
+
             this.startAutoScanLoop();
 
         } catch (error) {
@@ -190,6 +233,15 @@ class BusinessCardScanner {
         this.cameraStreamContainer.classList.add('hidden');
         this.captureButtons.classList.remove('hidden');
         this.stopAutoScanLoop();
+
+        // ガイドオーバーレイをクリア
+        if (this.guideOverlay) {
+            const ctx = this.guideOverlay.getContext('2d');
+            ctx.clearRect(0, 0, this.guideOverlay.width, this.guideOverlay.height);
+        }
+        this.guideState = 'none';
+        this.guideLastFrame = null;
+        this.guideStableCount = 0;
     }
 
     takePicture() {
@@ -312,17 +364,234 @@ class BusinessCardScanner {
             this.autoScanContext = this.autoScanCanvas.getContext('2d', { willReadFrequently: true });
         }
 
+        // ガイド枠検出用キャンバス（名刺比率 64×40）
+        if (!this.guideDetectCanvas) {
+            this.guideDetectCanvas = document.createElement('canvas');
+            this.guideDetectCanvas.width = 64;
+            this.guideDetectCanvas.height = 40;
+            this.guideDetectContext = this.guideDetectCanvas.getContext('2d', { willReadFrequently: true });
+        }
+
         const loop = () => {
             if (!this.autoScanEnabled || !this.stream) {
                 this.stopAutoScanLoop();
                 return;
             }
 
-            this.processAutoScanFrame();
+            this.updateGuideOverlay();
             this.autoScanLoopId = requestAnimationFrame(loop);
         };
 
         this.autoScanLoopId = requestAnimationFrame(loop);
+    }
+
+    // ガイド枠の座標計算（名刺比率 1.585:1）
+    getGuideRect(canvasWidth, canvasHeight) {
+        const CARD_RATIO = 85.6 / 54;  // 名刺縦横比 ≒ 1.585
+        const MARGIN = 0.08;
+
+        const availW = canvasWidth  * (1 - MARGIN * 2);
+        const availH = canvasHeight * (1 - MARGIN * 2);
+
+        let guideW, guideH;
+        if (availW / availH > CARD_RATIO) {
+            guideH = availH;
+            guideW = guideH * CARD_RATIO;
+        } else {
+            guideW = availW;
+            guideH = guideW / CARD_RATIO;
+        }
+
+        const x = (canvasWidth  - guideW) / 2;
+        const y = (canvasHeight - guideH) / 2;
+
+        return { x, y, w: guideW, h: guideH };
+    }
+
+    // ガイドオーバーレイキャンバスをビデオ解像度に合わせてリサイズ
+    resizeGuideOverlay() {
+        if (!this.guideOverlay || !this.cameraStream) return;
+        const v = this.cameraStream;
+        this.guideOverlay.width  = v.videoWidth  || 640;
+        this.guideOverlay.height = v.videoHeight || 480;
+        this.drawGuideFrame();
+    }
+
+    // ガイド枠を描画（状態に応じた色）
+    drawGuideFrame() {
+        if (!this.guideOverlay || !this.guideOverlay.width) return;
+        const ctx = this.guideOverlay.getContext('2d');
+        const W = this.guideOverlay.width;
+        const H = this.guideOverlay.height;
+        const rect = this.getGuideRect(W, H);
+
+        ctx.clearRect(0, 0, W, H);
+
+        const colors = {
+            none:      { border: '#aaaaaa', label: '名刺を枠内に合わせてください' },
+            detected:  { border: '#ffd600', label: 'そのまま静止してください...' },
+            capturing: { border: '#00c853', label: '撮影します!' }
+        };
+        const c = colors[this.guideState] || colors.none;
+
+        // 外側を暗くするマスク
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(0, 0, W, H);
+
+        // ガイド枠内部をクリア（明るく見せる）
+        ctx.clearRect(rect.x, rect.y, rect.w, rect.h);
+
+        // 枠のボーダー
+        const lw = Math.max(3, W * 0.005);
+        ctx.strokeStyle = c.border;
+        ctx.lineWidth = lw;
+        ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+
+        // 四隅のコーナーマーカー（L字）
+        const cornerLen = Math.min(rect.w, rect.h) * 0.12;
+        ctx.lineWidth = lw * 2.5;
+        const corners = [
+            [rect.x,          rect.y,           1,  1],
+            [rect.x + rect.w, rect.y,          -1,  1],
+            [rect.x,          rect.y + rect.h,  1, -1],
+            [rect.x + rect.w, rect.y + rect.h, -1, -1]
+        ];
+        corners.forEach(([cx, cy, dx, dy]) => {
+            ctx.beginPath();
+            ctx.moveTo(cx + dx * cornerLen, cy);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx, cy + dy * cornerLen);
+            ctx.stroke();
+        });
+
+        // ステータスラベル
+        const fontSize = Math.max(13, H * 0.028);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = c.border;
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 5;
+        ctx.fillText(c.label, W / 2, rect.y - fontSize * 0.4);
+        ctx.shadowBlur = 0;
+    }
+
+    // ガイド枠内の名刺検出・状態遷移
+    updateGuideOverlay() {
+        if (!this.guideDetectCanvas) return;
+        if (this.isAnalyzing) return;
+
+        const video = this.cameraStream;
+        if (!video || video.readyState < 2) return;
+        if (Date.now() < this.guideCooldownUntil) return;
+
+        const W = this.guideDetectCanvas.width;   // 64
+        const H = this.guideDetectCanvas.height;  // 40
+        const ctx = this.guideDetectContext;
+
+        // ガイド枠の実座標を取得（ビデオ解像度基準）
+        const vW = video.videoWidth  || 640;
+        const vH = video.videoHeight || 480;
+        const rect = this.getGuideRect(vW, vH);
+
+        // ガイド枠内のみを 64×40 に縮小して描画
+        ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, W, H);
+        const imageData = ctx.getImageData(0, 0, W, H);
+        const data = imageData.data;
+        const pixelCount = W * H;
+
+        // --- 平均色の計算 ---
+        let sumR = 0, sumG = 0, sumB = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            sumR += data[i]; sumG += data[i + 1]; sumB += data[i + 2];
+        }
+        const meanR = sumR / pixelCount;
+        const meanG = sumG / pixelCount;
+        const meanB = sumB / pixelCount;
+
+        // --- 分散計算（名刺存在検出）+ 輝度配列 ---
+        let varianceSum = 0;
+        const luminance = new Uint8Array(pixelCount);
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+            luminance[j] = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            const dr = data[i]     - meanR;
+            const dg = data[i + 1] - meanG;
+            const db = data[i + 2] - meanB;
+            varianceSum += dr * dr + dg * dg + db * db;
+        }
+        const variance = varianceSum / pixelCount;
+
+        // --- モーション検出（安定性）---
+        let avgDiff = 0;
+        if (this.guideLastFrame) {
+            let diffSum = 0;
+            for (let i = 0; i < luminance.length; i++) {
+                diffSum += Math.abs(luminance[i] - this.guideLastFrame[i]);
+            }
+            avgDiff = diffSum / luminance.length;
+        }
+        this.guideLastFrame = luminance;
+
+        // --- 状態遷移 ---
+        const VARIANCE_THRESHOLD = 300;  // 名刺あり判定
+        const MOTION_THRESHOLD   = 6;    // 静止判定
+        const STABLE_FRAMES      = 8;    // 必要安定フレーム数
+
+        const cardPresent  = variance > VARIANCE_THRESHOLD;
+        const motionStopped = avgDiff < MOTION_THRESHOLD;
+
+        if (cardPresent && motionStopped) {
+            this.guideStableCount++;
+        } else {
+            this.guideStableCount = 0;
+        }
+
+        let newState;
+        if (!cardPresent) {
+            newState = 'none';
+        } else if (this.guideStableCount < STABLE_FRAMES) {
+            newState = 'detected';
+        } else {
+            newState = 'capturing';
+        }
+
+        // 状態変化時のみ再描画（パフォーマンス最適化）
+        if (newState !== this.guideState) {
+            this.guideState = newState;
+            this.drawGuideFrame();
+        }
+
+        // 撮影トリガー
+        if (this.guideState === 'capturing' && !this.isAnalyzing) {
+            this.guideStableCount = 0;
+            this.guideCooldownUntil = Date.now() + 4000;
+            this.playBeep();
+            this.takePicture();
+        }
+    }
+
+    // Web Audio API によるビープ音
+    playBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
+
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.2);
+            oscillator.onended = () => audioCtx.close();
+        } catch (e) {
+            // Web Audio API が使えない環境では無視
+        }
     }
 
     stopAutoScanLoop() {
@@ -466,7 +735,7 @@ class BusinessCardScanner {
 
     handleTokenResponse(response) {
         if (!response || !response.access_token) {
-            this.showNotification('? Google認証に失敗しました', 'error');
+            this.showNotification('❌ Google認証に失敗しました', 'error');
             return;
         }
 
@@ -487,7 +756,7 @@ class BusinessCardScanner {
 
     connectGoogle() {
         if (!this.tokenClient) {
-            this.showNotification('? Google認証の準備中です。少し待ってから再試行してください。', 'warning');
+            this.showNotification('⚠️ Google認証の準備中です。少し待ってから再試行してください。', 'warning');
             return;
         }
 
@@ -497,12 +766,12 @@ class BusinessCardScanner {
 
     ensureGoogleToken() {
         if (!this.googleAccessToken) {
-            this.showNotification('? Googleで接続してください', 'warning');
+            this.showNotification('⚠️ Googleで接続してください', 'warning');
             return false;
         }
 
         if (this.googleTokenExpiresAt && Date.now() > this.googleTokenExpiresAt) {
-            this.showNotification('? 認証の有効期限が切れました。再接続してください。', 'warning');
+            this.showNotification('⚠️ 認証の有効期限が切れました。再接続してください。', 'warning');
             this.updateGoogleStatus('未接続');
             this.googleAccessToken = null;
             return false;
@@ -525,7 +794,7 @@ class BusinessCardScanner {
 
         const spreadsheetId = this.extractSpreadsheetId(this.spreadsheetIdInput.value);
         if (!spreadsheetId) {
-            this.showNotification('? スプレッドシートのURLまたはIDを入力してください', 'error');
+            this.showNotification('❌ スプレッドシートのURLまたはIDを入力してください', 'error');
             return;
         }
 
@@ -554,10 +823,10 @@ class BusinessCardScanner {
                 this.sheetSelect.value = this.savedSheetName;
             }
 
-            this.showNotification('? シート一覧を取得しました', 'success');
+            this.showNotification('✅ シート一覧を取得しました', 'success');
         } catch (error) {
             console.error('Load sheets error:', error);
-            this.showNotification('? シート一覧の取得に失敗しました', 'error');
+            this.showNotification('❌ シート一覧の取得に失敗しました', 'error');
         }
     }
 
@@ -566,12 +835,12 @@ class BusinessCardScanner {
         const sheetName = this.sheetSelect.value;
 
         if (!spreadsheetId) {
-            this.showNotification('? スプレッドシートURL / IDを設定してください', 'error');
+            this.showNotification('❌ スプレッドシートURL / IDを設定してください', 'error');
             return null;
         }
 
         if (!sheetName) {
-            this.showNotification('? 書き込み先シートを選択してください', 'error');
+            this.showNotification('❌ 書き込み先シートを選択してください', 'error');
             return null;
         }
 
@@ -585,21 +854,39 @@ class BusinessCardScanner {
 
     buildSheetRow(data) {
         return [
+            '',
+            '',
             this.sanitizeSheetValue(data.type),
             this.sanitizeSheetValue(data.name),
-            this.sanitizeSheetValue(data.company),
             this.sanitizeSheetValue(data.position),
             this.sanitizeSheetValue(data.phone),
             this.sanitizeSheetValue(data.email),
             this.sanitizeSheetValue(data.website),
+            this.sanitizeSheetValue(data.address),
             this.sanitizeSheetValue(data.tag),
             this.sanitizeSheetValue(data.contactDate),
             this.sanitizeSheetValue(data.contactMethod),
             this.sanitizeSheetValue(data.referrer),
             this.sanitizeSheetValue(data.status),
             this.sanitizeSheetValue(data.assignee),
-            '', '', '', '', '', '', '', '', '', '', '',
-            this.sanitizeSheetValue(data.nextAction)
+            new Date().toISOString(),
+            ''
+        ];
+    }
+
+    buildActivityLogRow(data) {
+        const today = new Date().toISOString().split('T')[0];
+        return [
+            '',
+            '',
+            '',
+            this.sanitizeSheetValue(data.name),
+            this.sanitizeSheetValue(data.company),
+            today,
+            '名刺交換',
+            this.sanitizeSheetValue(data.nextAction),
+            this.sanitizeSheetValue(data.assignee),
+            ''
         ];
     }
 
@@ -633,17 +920,28 @@ class BusinessCardScanner {
         return lastRow + 1;
     }
 
-    async appendRowsToSheet(rows) {
-        if (!this.ensureGoogleToken()) return;
-        const selection = this.getSelectedSheetInfo();
-        if (!selection) return;
+    columnNumberToLetters(columnNumber) {
+        let num = columnNumber;
+        let letters = '';
+        while (num > 0) {
+            const rem = (num - 1) % 26;
+            letters = String.fromCharCode(65 + rem) + letters;
+            num = Math.floor((num - 1) / 26);
+        }
+        return letters || 'A';
+    }
 
-        const { spreadsheetId, sheetName } = selection;
+    async appendRowsToSheet(spreadsheetId, sheetName, rows, options = {}) {
+        const { silentSuccess = false, silentError = false } = options;
+        if (!this.ensureGoogleToken()) return false;
+        if (!spreadsheetId || !sheetName || !rows || rows.length === 0) return false;
 
         try {
             const startRow = await this.getNextAppendRow(spreadsheetId, sheetName);
             const endRow = startRow + rows.length - 1;
-            const range = encodeURIComponent(`${sheetName}!A${startRow}:Y${endRow}`);
+            const maxCols = rows.reduce((max, row) => Math.max(max, row.length), 1);
+            const endColumn = this.columnNumberToLetters(maxCols);
+            const range = encodeURIComponent(`${sheetName}!A${startRow}:${endColumn}${endRow}`);
 
             const response = await fetch(
                 `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
@@ -662,27 +960,61 @@ class BusinessCardScanner {
                 throw new Error(errorText || 'シートへの書き込みに失敗しました');
             }
 
-            this.showNotification('? シートに追加しました', 'success');
+            if (!silentSuccess) {
+                this.showNotification('シートに追加しました', 'success');
+            }
+            return true;
         } catch (error) {
             console.error('Append to sheet error:', error);
-            this.showNotification('? シートへの書き込みに失敗しました', 'error');
+            if (!silentError) {
+                this.showNotification('シートへの書き込みに失敗しました', 'error');
+            }
+            return false;
         }
     }
 
     async writeCurrentToSheet() {
+        const selection = this.getSelectedSheetInfo();
+        if (!selection) return;
+
+        const { spreadsheetId, sheetName } = selection;
         const data = this.getCurrentFormData();
-        const row = this.buildSheetRow(data);
-        await this.appendRowsToSheet([row]);
+        const contactRow = this.buildSheetRow(data);
+
+        const contactOk = await this.appendRowsToSheet(spreadsheetId, sheetName, [contactRow], { silentSuccess: true });
+        if (!contactOk) return;
+
+        const hasNextAction = !!(data.nextAction && data.nextAction.trim());
+        if (!hasNextAction) {
+            this.showNotification('担当者シートに追加しました', 'success');
+            return;
+        }
+
+        const activityRow = this.buildActivityLogRow(data);
+        const activityOk = await this.appendRowsToSheet(spreadsheetId, '活動ログ', [activityRow], { silentSuccess: true, silentError: true });
+
+        if (activityOk) {
+            this.showNotification('担当者シートと活動ログに追加しました', 'success');
+        } else {
+            this.showNotification('担当者シートには追加しましたが、活動ログへの追加に失敗しました', 'warning');
+        }
     }
 
     async writeBatchToSheet() {
         if (this.batchData.length === 0) {
-            this.showNotification('? 一時保存されたデータがありません', 'error');
+            this.showNotification('一時保存されたデータがありません', 'error');
             return;
         }
 
+        const selection = this.getSelectedSheetInfo();
+        if (!selection) return;
+
+        const { spreadsheetId, sheetName } = selection;
         const rows = this.batchData.map(data => this.buildSheetRow(data));
-        await this.appendRowsToSheet(rows);
+        const ok = await this.appendRowsToSheet(spreadsheetId, sheetName, rows, { silentSuccess: true });
+        if (ok) {
+            this.showNotification(`${this.batchData.length}件をシートに追加しました`, 'success');
+        }
     }
 
     async handleImageCapture(event) {
@@ -722,6 +1054,7 @@ class BusinessCardScanner {
             this.fields.phone.value = result.phone;
             this.fields.email.value = result.email;
             this.fields.website.value = result.website;
+            this.fields.address.value = result.address || '';
             this.fields.tag.value = result.tag;
             this.fields.contactDate.value = result.contactDate || new Date().toISOString().split('T')[0];
             this.fields.contactMethod.value = result.contactMethod;
@@ -731,11 +1064,15 @@ class BusinessCardScanner {
             this.fields.nextAction.value = result.nextAction;
             this.renderTokenUsage(result.usage);
 
-            // 結果セクション表示
-            this.showSection('result');
-
             // 履歴に追加
             this.addToHistory(result);
+
+            // 自動スキャンONのときはクイック確認、OFFのときは全フォーム
+            if (this.autoScanEnabled && this.quickConfirmSection) {
+                this.showQuickConfirm(result);
+            } else {
+                this.showSection('result');
+            }
 
         } catch (error) {
             console.error('Analysis error:', error);
@@ -749,6 +1086,7 @@ class BusinessCardScanner {
         this.cameraSection.classList.add('hidden');
         this.loadingSection.classList.add('hidden');
         this.resultSection.classList.add('hidden');
+        if (this.quickConfirmSection) this.quickConfirmSection.classList.add('hidden');
 
         switch (sectionName) {
             case 'camera':
@@ -759,6 +1097,9 @@ class BusinessCardScanner {
                 break;
             case 'result':
                 this.resultSection.classList.remove('hidden');
+                break;
+            case 'quickConfirm':
+                if (this.quickConfirmSection) this.quickConfirmSection.classList.remove('hidden');
                 break;
         }
     }
@@ -832,6 +1173,7 @@ class BusinessCardScanner {
         this.fields.phone.value = entry.phone || '';
         this.fields.email.value = entry.email || '';
         this.fields.website.value = entry.website || '';
+        this.fields.address.value = entry.address || '';
         this.fields.tag.value = entry.tag || '';
         this.fields.contactDate.value = entry.contactDate || '';
         this.fields.contactMethod.value = entry.contactMethod || '';
@@ -852,6 +1194,18 @@ class BusinessCardScanner {
         } catch {
             return [];
         }
+    }
+
+    loadBatch() {
+        try {
+            return JSON.parse(localStorage.getItem('batchData') || '[]');
+        } catch {
+            return [];
+        }
+    }
+
+    saveBatch() {
+        localStorage.setItem('batchData', JSON.stringify(this.batchData));
     }
 
     saveHistory() {
@@ -959,6 +1313,7 @@ class BusinessCardScanner {
             phone: this.fields.phone.value,
             email: this.fields.email.value,
             website: this.fields.website.value,
+            address: this.fields.address.value,
             tag: this.fields.tag.value,
             contactDate: this.fields.contactDate.value,
             contactMethod: this.fields.contactMethod.value,
@@ -987,23 +1342,77 @@ class BusinessCardScanner {
     }
 
     retake() {
+        this.stopQuickConfirmCountdown();
         this.fileInput.value = '';
         this.previewContainer.classList.add('hidden');
         this.closeCamera();
         this.showSection('camera');
     }
 
-    showNotification(message, type = 'info') {
-        // シンプルなアラート（将来的にトーストUIに変更可能）
-        const icons = {
-            success: '✅',
-            error: '❌',
-            warning: '⚠️',
-            info: 'ℹ️'
-        };
+    // クイック確認パネルを表示
+    showQuickConfirm(result) {
+        if (this.currentImageFile) {
+            const url = URL.createObjectURL(this.currentImageFile);
+            this.quickConfirmThumb.src = url;
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+        this.quickConfirmName.textContent    = result.name    || '（氏名なし）';
+        this.quickConfirmCompany.textContent = result.company || '（法人名なし）';
+        this.showSection('quickConfirm');
+        this.startQuickConfirmCountdown();
+    }
 
-        const icon = icons[type] || icons.info;
-        alert(`${icon} ${message}`);
+    startQuickConfirmCountdown() {
+        this.stopQuickConfirmCountdown();
+        this.quickConfirmSecondsLeft = 5;
+        if (this.quickConfirmCountdown) this.quickConfirmCountdown.textContent = this.quickConfirmSecondsLeft;
+
+        this.quickConfirmTimerId = setInterval(() => {
+            this.quickConfirmSecondsLeft--;
+            if (this.quickConfirmCountdown) this.quickConfirmCountdown.textContent = this.quickConfirmSecondsLeft;
+            if (this.quickConfirmSecondsLeft <= 0) {
+                this.stopQuickConfirmCountdown();
+                this.quickConfirmAndNext();
+            }
+        }, 1000);
+    }
+
+    stopQuickConfirmCountdown() {
+        if (this.quickConfirmTimerId) {
+            clearInterval(this.quickConfirmTimerId);
+            this.quickConfirmTimerId = null;
+        }
+    }
+
+    // クイック確認: バッチに追加して次の名刺へ
+    quickConfirmAndNext() {
+        this.stopQuickConfirmCountdown();
+        const data = this.getCurrentFormData();
+        if (!data.name && !data.company) {
+            this.showNotification('❌ 氏名または法人名が必要です', 'error');
+            return;
+        }
+        this.batchData.push(data);
+        this.saveBatch();
+        this.renderBatchList();
+        this.showNotification(`✅ 一時保存しました（${this.batchData.length}件）`, 'success');
+        this.returnToCameraAfterAction();
+    }
+
+    // 詳細フォームを開く（カウントダウンをキャンセルしてフルフォームへ）
+    openFullForm() {
+        this.stopQuickConfirmCountdown();
+        this.showSection('result');
+    }
+
+    showNotification(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        if (!container) { alert(message); return; }
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
     }
 
     // バッチ処理用メソッド
@@ -1016,6 +1425,7 @@ class BusinessCardScanner {
         }
 
         this.batchData.push(data);
+        this.saveBatch();
         this.renderBatchList();
         this.showNotification(`✅ 一時保存しました（${this.batchData.length}件）`, 'success');
 
@@ -1061,6 +1471,7 @@ class BusinessCardScanner {
 
     removeFromBatch(index) {
         this.batchData.splice(index, 1);
+        this.saveBatch();
         this.renderBatchList();
         this.showNotification('🗑️ 削除しました', 'info');
     }
@@ -1069,6 +1480,7 @@ class BusinessCardScanner {
         if (!confirm('一時保存されたデータをすべて削除しますか？')) return;
 
         this.batchData = [];
+        this.saveBatch();
         this.renderBatchList();
         this.showNotification('🗑️ 一時保存データをクリアしました', 'info');
     }
@@ -1188,6 +1600,7 @@ class BusinessCardScanner {
 
         if (clearBatch) {
             this.batchData = [];
+            this.saveBatch();
         }
 
         // ローディング表示
@@ -1231,6 +1644,7 @@ class BusinessCardScanner {
         }
 
         // バッチリストを更新
+        this.saveBatch();
         this.renderBatchList();
 
         // 完了メッセージ

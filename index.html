@@ -9,6 +9,7 @@
     <link rel="manifest" href="manifest.json">
 </head>
 <body>
+    <div id="toastContainer" class="toast-container"></div>
     <div class="container">
         <!-- ヘッダー -->
         <header>
@@ -54,7 +55,10 @@
                 <div class="camera-container">
                     <!-- カメラストリーム（PC用） -->
                     <div id="cameraStreamContainer" class="camera-stream-container hidden">
-                        <video id="cameraStream" autoplay playsinline></video>
+                        <div class="video-wrapper">
+                            <video id="cameraStream" autoplay playsinline></video>
+                            <canvas id="guideOverlay" class="guide-overlay"></canvas>
+                        </div>
                         <canvas id="canvas" style="display: none;"></canvas>
                         <div class="camera-controls">
                             <button id="takePictureBtn" class="btn btn-primary">📸 撮影</button>
@@ -100,6 +104,31 @@
                 </div>
             </section>
 
+            <!-- クイック確認セクション（自動スキャンモード用） -->
+            <section id="quickConfirmSection" class="section hidden">
+                <div class="quick-confirm-panel">
+                    <div class="quick-confirm-thumb-wrap">
+                        <img id="quickConfirmThumb" class="quick-confirm-thumb" alt="撮影画像">
+                    </div>
+                    <div class="quick-confirm-info">
+                        <p class="quick-confirm-label">抽出された情報</p>
+                        <p id="quickConfirmName" class="quick-confirm-name">-</p>
+                        <p id="quickConfirmCompany" class="quick-confirm-company">-</p>
+                    </div>
+                    <div class="quick-confirm-countdown">
+                        <span id="quickConfirmCountdown">5</span>秒後に自動確定...
+                    </div>
+                    <div class="quick-confirm-actions">
+                        <button id="quickConfirmBtn" class="btn btn-warning quick-confirm-main-btn">
+                            📦 確定・次の名刺へ
+                        </button>
+                        <button id="quickEditBtn" class="btn btn-secondary quick-edit-btn">
+                            ✏️ 詳細を編集
+                        </button>
+                    </div>
+                </div>
+            </section>
+
             <!-- 結果セクション -->
             <section id="resultSection" class="section hidden">
                 <h2>📋 抽出結果</h2>
@@ -135,6 +164,10 @@
                     <div class="form-group">
                         <label>HP</label>
                         <input type="url" id="website" placeholder="https://example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>住所</label>
+                        <input type="text" id="address" placeholder="東京都渋谷区〇〇 1-2-3">
                     </div>
                     <div class="form-group">
                         <label>タグ</label>
@@ -217,5 +250,12 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="api.js"></script>
     <script src="app.js"></script>
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./service-worker.js')
+            .then(() => console.log('SW registered'))
+            .catch(e => console.warn('SW registration failed:', e));
+    }
+    </script>
 </body>
 </html>

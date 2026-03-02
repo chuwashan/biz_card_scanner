@@ -8,7 +8,13 @@
       "Bash(tasklist:*)",
       "Bash(wmic process where \"ProcessId=42780\" get ProcessId,CommandLine,ExecutablePath)",
       "Bash(taskkill:*)",
-      "Bash(powershell -Command \"Stop-Process -Id 42780 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 42780 -Force\")",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-14-2k-sheets.googleusercontent.com)",
+      "WebFetch(domain:boxil.jp)",
+      "Bash(codex --version)",
+      "Bash(node --version)",
+      "Bash(npx --version)"
     ]
   }
 }
