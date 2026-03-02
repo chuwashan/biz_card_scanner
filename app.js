@@ -561,39 +561,42 @@ class BusinessCardScanner {
 
         // --- 状態遷移 ---
         const VARIANCE_THRESHOLD = 300;  // 名刺あり判定
-        const MOTION_THRESHOLD   = 6;    // 静止判定
+        const MOTION_THRESHOLD   = 6;    // 静止判定（カウントダウン開始前のみ使用）
         const STABLE_FRAMES      = 8;    // 必要安定フレーム数
 
-        const cardPresent  = variance > VARIANCE_THRESHOLD;
+        const cardPresent   = variance > VARIANCE_THRESHOLD;
         const motionStopped = avgDiff < MOTION_THRESHOLD;
 
-        if (cardPresent && motionStopped) {
-            this.guideStableCount++;
-        } else {
-            this.guideStableCount = 0;
-        }
-
         let newState;
-        if (!cardPresent) {
-            newState = 'none';
-            this.captureCountdownUntil = 0;  // カード離れたらカウントダウンリセット
-        } else if (this.guideStableCount < STABLE_FRAMES) {
-            newState = 'detected';
-            this.captureCountdownUntil = 0;
-        } else {
-            // カウントダウン開始（まだ開始していなければ）
-            if (this.captureCountdownUntil === 0) {
-                this.captureCountdownUntil = Date.now() + 2000; // 2秒カウントダウン
-            }
-            const remaining = this.captureCountdownUntil - Date.now();
-            newState = remaining > 0 ? 'countdown' : 'capturing';
-        }
 
-        // countdown中でもカードが動いたらリセット
-        if (!motionStopped && this.guideState === 'countdown') {
-            newState = 'detected';
-            this.captureCountdownUntil = 0;
-            this.guideStableCount = 0;
+        if (this.captureCountdownUntil > 0) {
+            // ── カウントダウン進行中 ──
+            // カードが枠から消えた場合のみリセット（手ブレは無視）
+            if (!cardPresent) {
+                this.captureCountdownUntil = 0;
+                this.guideStableCount = 0;
+                newState = 'none';
+            } else {
+                const remaining = this.captureCountdownUntil - Date.now();
+                newState = remaining > 0 ? 'countdown' : 'capturing';
+            }
+        } else {
+            // ── カウントダウン前：静止検出フェーズ ──
+            if (cardPresent && motionStopped) {
+                this.guideStableCount++;
+            } else {
+                this.guideStableCount = 0;
+            }
+
+            if (!cardPresent) {
+                newState = 'none';
+            } else if (this.guideStableCount < STABLE_FRAMES) {
+                newState = 'detected';
+            } else {
+                // 安定フレーム達成 → カウントダウン開始
+                this.captureCountdownUntil = Date.now() + 2000;
+                newState = 'countdown';
+            }
         }
 
         // 状態変化 or countdown中は毎フレーム再描画（数字更新のため）
