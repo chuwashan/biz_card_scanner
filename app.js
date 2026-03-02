@@ -762,10 +762,22 @@ class BusinessCardScanner {
             this.tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: clientId,
                 scope,
-                callback: (response) => this.handleTokenResponse(response)
+                callback: (response) => this.handleTokenResponse(response),
+                error_callback: () => { /* サイレント認証失敗 → 手動接続待ち */ }
             });
 
             this.updateGoogleStatus('未接続');
+
+            // スプレッドシートIDが保存済みならサイレント認証を試みる（ポップアップなし）
+            if (localStorage.getItem('spreadsheetId')) {
+                try {
+                    this._silentAuth = true;
+                    this.tokenClient.requestAccessToken({ prompt: '' });
+                } catch (_) {
+                    this._silentAuth = false;
+                }
+            }
+
             return true;
         };
 
@@ -779,8 +791,12 @@ class BusinessCardScanner {
     }
 
     handleTokenResponse(response) {
+        const wasSilent = this._silentAuth;
+        this._silentAuth = false;
         if (!response || !response.access_token) {
-            this.showNotification('❌ Google認証に失敗しました', 'error');
+            if (!wasSilent) {
+                this.showNotification('❌ Google認証に失敗しました', 'error');
+            }
             return;
         }
 
@@ -877,7 +893,8 @@ class BusinessCardScanner {
 
     getSelectedSheetInfo() {
         const spreadsheetId = this.extractSpreadsheetId(this.spreadsheetIdInput.value);
-        const sheetName = this.sheetSelect.value;
+        // sheetSelect はページロード直後は空なので savedSheetName をフォールバックに使う
+        const sheetName = this.sheetSelect.value || this.savedSheetName;
 
         if (!spreadsheetId) {
             this.showNotification('❌ スプレッドシートURL / IDを設定してください', 'error');
