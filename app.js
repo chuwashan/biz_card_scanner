@@ -1030,14 +1030,19 @@ class BusinessCardScanner {
     }
 
     // 担当者シートの既存データと比較して重複する氏名を返す
+    // 戻り値: string[] = 重複あり / null = チェック失敗（素通し不可）
     async getDuplicateNames(spreadsheetId, sheetName, newItems) {
+        if (!this.googleAccessToken) return null;
         try {
             const range = encodeURIComponent(`${sheetName}!A:Z`);
             const response = await fetch(
                 `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?majorDimension=ROWS`,
                 { headers: { Authorization: `Bearer ${this.googleAccessToken}` } }
             );
-            if (!response.ok) return []; // チェック失敗時は素通し
+            if (!response.ok) {
+                console.warn('重複チェック失敗:', response.status);
+                return null;
+            }
 
             const data = await response.json();
             const existingRows = (data.values || []).slice(1); // ヘッダー行をスキップ
@@ -1049,12 +1054,19 @@ class BusinessCardScanner {
                     .filter(n => n)
             );
 
-            // 新規データのうち既存と氏名が一致するものを返す
+            // 新規データのうち既存と氏名が一致するものを返す（重複除去）
+            const seen = new Set();
             return newItems
                 .map(item => String(item.name || '').trim())
-                .filter(name => name && existingNames.has(name.toLowerCase()));
+                .filter(name => {
+                    if (!name || !existingNames.has(name.toLowerCase())) return false;
+                    if (seen.has(name.toLowerCase())) return false;
+                    seen.add(name.toLowerCase());
+                    return true;
+                });
         } catch (e) {
-            return []; // エラー時は素通し
+            console.error('重複チェックエラー:', e);
+            return null;
         }
     }
 
@@ -1067,9 +1079,11 @@ class BusinessCardScanner {
 
         // 重複チェック
         const duplicates = await this.getDuplicateNames(spreadsheetId, sheetName, [data]);
-        if (duplicates.length > 0) {
-            const ok = confirm(`「${duplicates[0]}」は担当者シートに既に登録されています。\n\n追加しますか？`);
-            if (!ok) return;
+        if (duplicates === null) {
+            // チェック失敗 → 確認してから続行
+            if (!confirm('重複チェックに失敗しました。\nそのまま追加しますか？')) return;
+        } else if (duplicates.length > 0) {
+            if (!confirm(`「${duplicates[0]}」は担当者シートに既に登録されています。\n\n追加しますか？`)) return;
         }
 
         const contactRow = this.buildSheetRow(data);
@@ -1097,17 +1111,31 @@ class BusinessCardScanner {
 
         const { spreadsheetId, sheetName } = selection;
 
-        // 重複チェック
-        const duplicateNames = await this.getDuplicateNames(spreadsheetId, sheetName, this.batchData);
-        let targetData = this.batchData;
+        // Step1: batchData内の氏名重複を除去（同じ名刺を複数回スキャンした場合）
+        const seenInBatch = new Set();
+        let targetData = this.batchData.filter(d => {
+            const n = String(d.name || '').trim().toLowerCase();
+            if (!n) return true;
+            if (seenInBatch.has(n)) return false;
+            seenInBatch.add(n);
+            return true;
+        });
+        const internalDupCount = this.batchData.length - targetData.length;
 
-        if (duplicateNames.length > 0) {
-            const nameList = duplicateNames.join('、');
-            const ok = confirm(`以下の方は既に登録されています：\n${nameList}\n\nスキップして残りを追加しますか？\n（「キャンセル」で全件中止）`);
-            if (!ok) return;
+        // Step2: スプレッドシートの既存データと照合
+        const duplicateNames = await this.getDuplicateNames(spreadsheetId, sheetName, targetData);
+
+        if (duplicateNames === null) {
+            // チェック失敗 → 確認してから続行
+            if (!confirm('重複チェックに失敗しました。\nそのまま追加しますか？')) return;
+        } else if (duplicateNames.length > 0) {
+            const nameList = duplicateNames.length <= 5
+                ? duplicateNames.join('、')
+                : duplicateNames.slice(0, 5).join('、') + ` 他${duplicateNames.length - 5}件`;
+            if (!confirm(`以下の方は既に登録されています：\n${nameList}\n\nスキップして残りを追加しますか？\n（「キャンセル」で全件中止）`)) return;
 
             const dupSet = new Set(duplicateNames.map(n => n.toLowerCase()));
-            targetData = this.batchData.filter(d => !dupSet.has(String(d.name || '').trim().toLowerCase()));
+            targetData = targetData.filter(d => !dupSet.has(String(d.name || '').trim().toLowerCase()));
 
             if (targetData.length === 0) {
                 this.showNotification('全件が重複しているため追加しませんでした', 'info');
@@ -1123,7 +1151,7 @@ class BusinessCardScanner {
         const activityOk = await this.appendRowsToSheet(spreadsheetId, '活動ログ', activityRows, { silentSuccess: true, silentError: true });
 
         const addedCount = targetData.length;
-        const skippedCount = this.batchData.length - addedCount;
+        const skippedCount = this.batchData.length - addedCount; // 内部重複 + シート重複の合計
 
         if (activityOk) {
             this.showNotification(
