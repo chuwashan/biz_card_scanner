@@ -1029,14 +1029,50 @@ class BusinessCardScanner {
         }
     }
 
+    // 担当者シートの既存データと比較して重複する氏名を返す
+    async getDuplicateNames(spreadsheetId, sheetName, newItems) {
+        try {
+            const range = encodeURIComponent(`${sheetName}!A:Z`);
+            const response = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?majorDimension=ROWS`,
+                { headers: { Authorization: `Bearer ${this.googleAccessToken}` } }
+            );
+            if (!response.ok) return []; // チェック失敗時は素通し
+
+            const data = await response.json();
+            const existingRows = (data.values || []).slice(1); // ヘッダー行をスキップ
+
+            // 既存の氏名セット（D列 = index 3）
+            const existingNames = new Set(
+                existingRows
+                    .map(row => String(row[3] || '').trim().toLowerCase())
+                    .filter(n => n)
+            );
+
+            // 新規データのうち既存と氏名が一致するものを返す
+            return newItems
+                .map(item => String(item.name || '').trim())
+                .filter(name => name && existingNames.has(name.toLowerCase()));
+        } catch (e) {
+            return []; // エラー時は素通し
+        }
+    }
+
     async writeCurrentToSheet() {
         const selection = this.getSelectedSheetInfo();
         if (!selection) return;
 
         const { spreadsheetId, sheetName } = selection;
         const data = this.getCurrentFormData();
-        const contactRow = this.buildSheetRow(data);
 
+        // 重複チェック
+        const duplicates = await this.getDuplicateNames(spreadsheetId, sheetName, [data]);
+        if (duplicates.length > 0) {
+            const ok = confirm(`「${duplicates[0]}」は担当者シートに既に登録されています。\n\n追加しますか？`);
+            if (!ok) return;
+        }
+
+        const contactRow = this.buildSheetRow(data);
         const contactOk = await this.appendRowsToSheet(spreadsheetId, sheetName, [contactRow], { silentSuccess: true });
         if (!contactOk) return;
 
@@ -1060,17 +1096,44 @@ class BusinessCardScanner {
         if (!selection) return;
 
         const { spreadsheetId, sheetName } = selection;
-        const rows = this.batchData.map(data => this.buildSheetRow(data));
+
+        // 重複チェック
+        const duplicateNames = await this.getDuplicateNames(spreadsheetId, sheetName, this.batchData);
+        let targetData = this.batchData;
+
+        if (duplicateNames.length > 0) {
+            const nameList = duplicateNames.join('、');
+            const ok = confirm(`以下の方は既に登録されています：\n${nameList}\n\nスキップして残りを追加しますか？\n（「キャンセル」で全件中止）`);
+            if (!ok) return;
+
+            const dupSet = new Set(duplicateNames.map(n => n.toLowerCase()));
+            targetData = this.batchData.filter(d => !dupSet.has(String(d.name || '').trim().toLowerCase()));
+
+            if (targetData.length === 0) {
+                this.showNotification('全件が重複しているため追加しませんでした', 'info');
+                return;
+            }
+        }
+
+        const rows = targetData.map(data => this.buildSheetRow(data));
         const ok = await this.appendRowsToSheet(spreadsheetId, sheetName, rows, { silentSuccess: true });
         if (!ok) return;
 
-        const activityRows = this.batchData.map(data => this.buildActivityLogRow(data));
+        const activityRows = targetData.map(data => this.buildActivityLogRow(data));
         const activityOk = await this.appendRowsToSheet(spreadsheetId, '活動ログ', activityRows, { silentSuccess: true, silentError: true });
 
+        const addedCount = targetData.length;
+        const skippedCount = this.batchData.length - addedCount;
+
         if (activityOk) {
-            this.showNotification(`${this.batchData.length}件を担当者シートと活動ログに追加しました`, 'success');
+            this.showNotification(
+                skippedCount > 0
+                    ? `${addedCount}件を追加しました（重複${skippedCount}件スキップ）`
+                    : `${addedCount}件を担当者シートと活動ログに追加しました`,
+                'success'
+            );
         } else {
-            this.showNotification(`${this.batchData.length}件を担当者シートに追加しました（活動ログへの追加に失敗）`, 'warning');
+            this.showNotification(`${addedCount}件を担当者シートに追加しました（活動ログへの追加に失敗）`, 'warning');
         }
     }
 
