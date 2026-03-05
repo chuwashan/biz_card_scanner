@@ -952,18 +952,57 @@ class BusinessCardScanner {
         ];
     }
 
+    async getNextAppendRow(spreadsheetId, sheetName) {
+        // A:Z 全列をスキャンして最終データ行を取得（列Aが空でも正しく判定できる）
+        const range = encodeURIComponent(`${sheetName}!A:Z`);
+        const response = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?majorDimension=ROWS`,
+            {
+                headers: { Authorization: `Bearer ${this.googleAccessToken}` }
+            }
+        );
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || '最終行の取得に失敗しました');
+        }
+        const data = await response.json();
+        const values = data.values || [];
+        let lastRow = 0;
+        values.forEach((row, index) => {
+            if (Array.isArray(row) && row.some(cell => String(cell).trim() !== '')) {
+                lastRow = index + 1;
+            }
+        });
+        return lastRow + 1;
+    }
+
+    columnNumberToLetters(columnNumber) {
+        let num = columnNumber;
+        let letters = '';
+        while (num > 0) {
+            const rem = (num - 1) % 26;
+            letters = String.fromCharCode(65 + rem) + letters;
+            num = Math.floor((num - 1) / 26);
+        }
+        return letters || 'A';
+    }
+
     async appendRowsToSheet(spreadsheetId, sheetName, rows, options = {}) {
         const { silentSuccess = false, silentError = false } = options;
         if (!this.ensureGoogleToken()) return false;
         if (!spreadsheetId || !sheetName || !rows || rows.length === 0) return false;
 
         try {
-            // Sheets API の :append エンドポイントを使用（最終行を自動検出して追記）
-            const range = encodeURIComponent(`${sheetName}!A1`);
+            const startRow = await this.getNextAppendRow(spreadsheetId, sheetName);
+            const endRow = startRow + rows.length - 1;
+            const maxCols = rows.reduce((max, row) => Math.max(max, row.length), 1);
+            const endColumn = this.columnNumberToLetters(maxCols);
+            const range = encodeURIComponent(`${sheetName}!A${startRow}:${endColumn}${endRow}`);
+
             const response = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+                `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=USER_ENTERED`,
                 {
-                    method: 'POST',
+                    method: 'PUT',
                     headers: {
                         Authorization: `Bearer ${this.googleAccessToken}`,
                         'Content-Type': 'application/json'
