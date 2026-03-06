@@ -36,6 +36,8 @@ class BusinessCardScanner {
         this.renderBatchList();
         this.checkApiKey();
         this.loadSheetSettings();
+        this.renderAssigneeSelect();
+        this.renderAssigneeList();
         this.initGoogleAuth();
     }
 
@@ -124,6 +126,11 @@ class BusinessCardScanner {
         this.cancelScanBtn = document.getElementById('cancelScanBtn');
         this.reloadAppBtn  = document.getElementById('reloadAppBtn');
 
+        // 担当者管理
+        this.newAssigneeNameInput = document.getElementById('newAssigneeName');
+        this.addAssigneeBtn       = document.getElementById('addAssigneeBtn');
+        this.assigneeListEl       = document.getElementById('assigneeList');
+
         // クイック確認パネル
         this.quickConfirmSection  = document.getElementById('quickConfirmSection');
         this.quickConfirmThumb    = document.getElementById('quickConfirmThumb');
@@ -206,6 +213,23 @@ class BusinessCardScanner {
         // PWAアップデートリロード
         if (this.reloadAppBtn) {
             this.reloadAppBtn.addEventListener('click', () => this.reloadApp());
+        }
+
+        // 担当者管理
+        if (this.addAssigneeBtn) {
+            this.addAssigneeBtn.addEventListener('click', () => this.addAssignee());
+        }
+        if (this.newAssigneeNameInput) {
+            this.newAssigneeNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') this.addAssignee();
+            });
+        }
+        if (this.fields.assignee) {
+            this.fields.assignee.addEventListener('change', () => {
+                if (this.fields.assignee.value) {
+                    localStorage.setItem('lastAssignee', this.fields.assignee.value);
+                }
+            });
         }
     }
 
@@ -317,6 +341,76 @@ class BusinessCardScanner {
         this.showNotification('✅ 設定を保存しました', 'success');
         this.toggleSettings();
     }
+
+    // ── 担当者管理 ──────────────────────────────────────────
+    loadAssignees() {
+        try { return JSON.parse(localStorage.getItem('assignees') || '[]'); }
+        catch { return []; }
+    }
+
+    saveAssignees(list) {
+        localStorage.setItem('assignees', JSON.stringify(list));
+    }
+
+    renderAssigneeSelect() {
+        const select = this.fields.assignee;
+        if (!select) return;
+        const assignees = this.loadAssignees();
+        const prev = select.value;
+        select.innerHTML = '<option value="">（未設定）</option>';
+        assignees.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+        // 以前の選択値 → 最後に使った担当者 の順でデフォルト設定
+        const last = localStorage.getItem('lastAssignee') || '';
+        if (prev && assignees.includes(prev)) {
+            select.value = prev;
+        } else if (last && assignees.includes(last)) {
+            select.value = last;
+        }
+    }
+
+    renderAssigneeList() {
+        if (!this.assigneeListEl) return;
+        const assignees = this.loadAssignees();
+        if (assignees.length === 0) {
+            this.assigneeListEl.innerHTML = '<li class="assignee-list-empty">担当者が登録されていません</li>';
+            return;
+        }
+        this.assigneeListEl.innerHTML = assignees.map(name =>
+            `<li class="assignee-list-item"><span>${name}</span><button class="assignee-delete-btn" data-name="${name}" type="button">✕</button></li>`
+        ).join('');
+        this.assigneeListEl.querySelectorAll('.assignee-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.removeAssignee(btn.dataset.name));
+        });
+    }
+
+    addAssignee() {
+        const name = this.newAssigneeNameInput?.value.trim();
+        if (!name) return;
+        const list = this.loadAssignees();
+        if (list.includes(name)) {
+            this.showNotification('その担当者は既に登録されています', 'warning');
+            return;
+        }
+        list.push(name);
+        this.saveAssignees(list);
+        this.newAssigneeNameInput.value = '';
+        this.renderAssigneeList();
+        this.renderAssigneeSelect();
+        this.showNotification(`✅ 「${name}」を追加しました`, 'success');
+    }
+
+    removeAssignee(name) {
+        const list = this.loadAssignees().filter(n => n !== name);
+        this.saveAssignees(list);
+        this.renderAssigneeList();
+        this.renderAssigneeSelect();
+    }
+    // ─────────────────────────────────────────────────────────
 
     loadSheetSettings() {
         const spreadsheetId = localStorage.getItem('spreadsheetId') || '';
@@ -1209,7 +1303,11 @@ class BusinessCardScanner {
             this.fields.contactMethod.value = result.contactMethod;
             this.fields.referrer.value = result.referrer;
             this.fields.status.value = result.status;
-            this.fields.assignee.value = result.assignee;
+            // OCRで担当者が取れなければ最後に使った担当者をデフォルト選択
+            this.renderAssigneeSelect();
+            if (result.assignee) {
+                this.fields.assignee.value = result.assignee;
+            }
             this.fields.nextAction.value = result.nextAction;
             this.renderTokenUsage(result.usage);
 

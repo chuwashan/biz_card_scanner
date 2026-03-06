@@ -43,6 +43,15 @@
                 </select>
             </div>
             <div class="form-group">
+                <label>担当者リスト</label>
+                <div class="assignee-input-row">
+                    <input type="text" id="newAssigneeName" placeholder="担当者名を入力">
+                    <button id="addAssigneeBtn" class="btn btn-secondary btn-sm" type="button">追加</button>
+                </div>
+                <ul id="assigneeList" class="assignee-list"></ul>
+                <small>登録した担当者は「担当者」欄のプルダウンに表示されます。</small>
+            </div>
+            <div class="form-group">
                 <button id="saveSettings" class="btn btn-primary">保存</button>
                 <button id="closeSettings" class="btn btn-secondary">閉じる</button>
             </div>
@@ -202,7 +211,9 @@
                     </div>
                     <div class="form-group">
                         <label>担当者</label>
-                        <input type="text" id="assignee" placeholder="担当者名">
+                        <select id="assignee">
+                            <option value="">（未設定）</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>ネクストアクション（初回連絡メッセージ）</label>

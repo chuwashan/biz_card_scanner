@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>名刺スキャナー 社内マニュアル</title>
+    <style>
+        body { font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; color: #333; line-height: 1.7; }
+        h1 { font-size: 24px; color: #1a73e8; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; margin-bottom: 24px; }
+        h2 { font-size: 19px; color: #1a73e8; border-left: 5px solid #1a73e8; padding-left: 12px; margin: 36px 0 14px; }
+        h3 { font-size: 16px; color: #333; margin: 20px 0 8px; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 14px; }
+        th { background: #e8f0fe; padding: 9px 12px; text-align: left; border: 1px solid #c5d5f5; }
+        td { padding: 8px 12px; border: 1px solid #ddd; vertical-align: top; }
+        tr:nth-child(even) td { background: #fafafa; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-right: 4px; }
+        .badge-auto { background: #e6f4ea; color: #188038; }
+        .badge-app { background: #e8f0fe; color: #1a73e8; }
+        .badge-manual { background: #fce8e6; color: #c5221f; }
+        .step { display: flex; gap: 14px; align-items: flex-start; margin: 10px 0; }
+        .step-num { background: #1a73e8; color: white; border-radius: 50%; min-width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
+        .step-body { flex: 1; }
+        .box { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+        .box-warn { background: #fff8e1; border-color: #f9ab00; }
+        .box-tip { background: #e6f4ea; border-color: #34a853; }
+        ul { padding-left: 22px; }
+        li { margin: 4px 0; }
+        code { background: #f1f3f4; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+        .toc { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; }
+        .toc a { color: #1a73e8; text-decoration: none; }
+        .toc a:hover { text-decoration: underline; }
+        .toc li { margin: 6px 0; }
+        footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e0e0e0; font-size: 13px; color: #888; }
+    </style>
+</head>
+<body>
+
+<h1>📇 名刺スキャナー 社内マニュアル</h1>
+<p>このマニュアルでは、名刺スキャナーアプリの使い方と、連携しているGoogle スプレッドシートの運用方法を説明します。</p>
+
+<div class="toc">
+    <strong>目次</strong>
+    <ol>
+        <li><a href="#overview">アプリの概要</a></li>
+        <li><a href="#setup">初回セットアップ（管理者向け）</a></li>
+        <li><a href="#sheets">スプレッドシートの構成</a></li>
+        <li><a href="#scan">名刺スキャンの手順</a></li>
+        <li><a href="#batch">まとめて登録する方法</a></li>
+        <li><a href="#team">チームで使うときの設定</a></li>
+        <li><a href="#assignee">担当者の管理</a></li>
+        <li><a href="#faq">よくある質問</a></li>
+    </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. アプリの概要</h2>
+
+<p>名刺の写真を撮ると、AIが自動で氏名・会社名・連絡先などを読み取り、Google スプレッドシートのCRMへ直接登録できるPWAアプリです。</p>
+
+<div class="box">
+    <strong>主な機能</strong>
+    <ul>
+        <li>📷 カメラ撮影 / 画像ファイル選択 / フォルダ一括スキャン</li>
+        <li>⚡ 自動スキャンモード（ガイド枠に合わせると自動撮影）</li>
+        <li>📊 Google スプレッドシートへ直接書き込み</li>
+        <li>📋 CSVコピー・ダウンロード</li>
+        <li>🔁 重複チェック（同じ人を二重登録しない）</li>
+    </ul>
+</div>
+
+<p>アプリURL: <code>https://chuwashan.github.io/biz_card_scanner/</code></p>
+
+<!-- ============================================================ -->
+<h2 id="setup">2. 初回セットアップ（管理者向け）</h2>
+
+<h3>2-1. Gemini API キーの取得</h3>
+<div class="step"><div class="step-num">1</div><div class="step-body"><a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a> にアクセスし、Googleアカウントでログイン</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-body">「Create API key」をクリックしてキーを発行</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-body">アプリの設定（⚙️ボタン）を開き、「Gemini API キー」欄に貼り付けて保存</div></div>
+
+<h3>2-2. Google スプレッドシートとの連携</h3>
+<div class="step"><div class="step-num">1</div><div class="step-body">設定パネルで「Googleで接続」をクリック → Googleアカウントでログイン</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-body">「スプレッドシートURL / ID」欄にスプレッドシートのURLを貼り付け</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-body">「シート一覧を取得」→ 書き込み先シート（通常「担当者」）を選択</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-body">「保存」をクリック</div></div>
+
+<div class="box box-warn">
+    ⚠️ Googleトークンはセッション中のみ有効です。ページをリロードしたあとは「Googleで接続」ボタンを再度押してください（設定自体はそのまま保持されます）。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="sheets">3. スプレッドシートの構成</h2>
+
+<p>スプレッドシートは複数のシート（タブ）で構成されています。アプリが書き込むのは <strong>担当者</strong> と <strong>活動ログ</strong> の2シートです。</p>
+
+<h3>3-1. 担当者シート（メインCRM）</h3>
+<p>名刺から読み取った情報が1行1件で登録されます。</p>
+
+<table>
+    <tr><th>列</th><th>項目名</th><th>入力元</th><th>説明</th></tr>
+    <tr><td>A</td><td>No.</td><td><span class="badge badge-auto">自動</span></td><td>スプレッドシートのスクリプトが自動で採番（BC-001など）</td></tr>
+    <tr><td>B</td><td>（予備）</td><td>—</td><td>手動記入欄として使用可能</td></tr>
+    <tr><td>C</td><td>属性</td><td><span class="badge badge-app">アプリ</span></td><td>「法人」または「個人」</td></tr>
+    <tr><td>D</td><td>氏名</td><td><span class="badge badge-app">アプリ</span></td><td>重複チェックはこの列で行います</td></tr>
+    <tr><td>E</td><td>部署・役職</td><td><span class="badge badge-app">アプリ</span></td><td></td></tr>
+    <tr><td>F</td><td>電話番号</td><td><span class="badge badge-app">アプリ</span></td><td></td></tr>
+    <tr><td>G</td><td>メールアドレス</td><td><span class="badge badge-app">アプリ</span></td><td></td></tr>
+    <tr><td>H</td><td>HP</td><td><span class="badge badge-app">アプリ</span></td><td></td></tr>
+    <tr><td>I</td><td>住所</td><td><span class="badge badge-app">アプリ</span></td><td></td></tr>
+    <tr><td>J</td><td>タグ</td><td><span class="badge badge-app">アプリ</span></td><td>「紹介」「検討中」など自由記入</td></tr>
+    <tr><td>K</td><td>初回接触日</td><td><span class="badge badge-app">アプリ</span></td><td>スキャン日が自動入力されます</td></tr>
+    <tr><td>L</td><td>接触方法</td><td><span class="badge badge-app">アプリ</span></td><td>「紹介」「展示会」など</td></tr>
+    <tr><td>M</td><td>紹介者</td><td><span class="badge badge-app">アプリ</span></td><td></td></tr>
+    <tr><td>N</td><td>ステータス</td><td><span class="badge badge-app">アプリ</span></td><td>進行中 / 名刺交換 / 検討中 / 受注 / 失注</td></tr>
+    <tr><td>O</td><td>担当者</td><td><span class="badge badge-app">アプリ</span></td><td>設定で登録した担当者名を選択</td></tr>
+    <tr><td>P</td><td>登録日時</td><td><span class="badge badge-auto">自動</span></td><td>アプリが書き込み時刻を自動記録</td></tr>
+</table>
+
+<h3>3-2. 活動ログシート</h3>
+<p>担当者シートへの書き込みと同時に自動で記録されます。</p>
+
+<table>
+    <tr><th>列</th><th>項目名</th><th>説明</th></tr>
+    <tr><td>A</td><td>No.</td><td>自動採番</td></tr>
+    <tr><td>D</td><td>氏名</td><td></td></tr>
+    <tr><td>E</td><td>法人名</td><td></td></tr>
+    <tr><td>F</td><td>日付</td><td>登録日（YYYY-MM-DD）</td></tr>
+    <tr><td>G</td><td>種別</td><td>「名刺交換」が自動入力</td></tr>
+    <tr><td>H</td><td>内容</td><td>フォームの「ネクストアクション」欄の内容</td></tr>
+    <tr><td>I</td><td>担当者</td><td></td></tr>
+</table>
+
+<div class="box box-tip">
+    💡 活動ログは「誰が・いつ・誰に・どんなアクションをとったか」を追跡するためのシートです。ここをフィルタリングすることで、担当者別・期間別の活動状況を確認できます。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="scan">4. 名刺スキャンの手順</h2>
+
+<h3>4-1. 手動スキャン（1枚ずつ確認しながら登録）</h3>
+
+<div class="step"><div class="step-num">1</div><div class="step-body">「📷 カメラで撮影」または「🖼️ ファイルを選択」をタップ</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-body">名刺を撮影する（または画像を選択）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-body">AIが自動で情報を読み取り、フォームに反映します（数秒かかります）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-body">内容を確認・修正し、担当者を選択</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-body">「シートに追加」→ スプレッドシートに直接登録 / 「📦 追加して次へ」→ 一時保存してから後でまとめて登録</div></div>
+
+<h3>4-2. 自動スキャンモード（大量スキャン向け）</h3>
+
+<div class="step"><div class="step-num">1</div><div class="step-body">「⚡ 自動スキャン: ON」をタップしてモードを有効にする</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-body">カメラが起動し、画面にガイド枠が表示される</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-body">名刺をガイド枠内に収まるよう静止させる → 2秒後に自動撮影（ビープ音あり）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-body">クイック確認パネルに氏名・法人名が表示される</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-body">「📦 確定・次の名刺へ」で一時保存 → 5秒以内に操作しなければ自動確定</div></div>
+<div class="step"><div class="step-num">6</div><div class="step-body">全枚数スキャン完了後、「まとめてシートに追加」でまとめて登録</div></div>
+
+<div class="box box-tip">
+    💡 自動スキャンモードは「スーパーのレジ打ち」感覚で連続スキャンできます。週末の一括処理に最適です。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="batch">5. まとめて登録する方法</h2>
+
+<p>「一時保存データ」セクションに保存された名刺をまとめてスプレッドシートに登録できます。</p>
+
+<div class="step"><div class="step-num">1</div><div class="step-body">名刺をスキャンして「📦 追加して次へ」で一時保存（複数枚OK）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-body">スキャンが終わったら「まとめてシートに追加」ボタンをタップ</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-body">重複チェックが実行され、既に登録済みの方は確認ダイアログで通知</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-body">問題なければ担当者シートと活動ログに一括追記</div></div>
+
+<div class="box box-warn">
+    ⚠️ 一時保存データはスプレッドシートに書き込んでも自動では消えません。「🗑️ 一時保存クリア」で手動削除してください。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="team">6. チームで使うときの設定</h2>
+
+<h3>メンバー1人ずつが行うこと</h3>
+<table>
+    <tr><th>設定項目</th><th>説明</th></tr>
+    <tr><td>Gemini API キー</td><td>各自のGoogleアカウントで取得（無料）して設定</td></tr>
+    <tr><td>Googleで接続</td><td>各自のアカウントで認証（スプレッドシートの編集権限が必要）</td></tr>
+    <tr><td>スプレッドシートURL</td><td>共有されたスプレッドシートのURLをそのまま貼り付け</td></tr>
+    <tr><td>書き込み先シート</td><td>「担当者」を選択</td></tr>
+    <tr><td>担当者リスト</td><td>設定パネルでチームメンバー全員の名前を登録しておく</td></tr>
+</table>
+
+<div class="box">
+    <strong>スプレッドシートの権限設定（管理者が行う）</strong>
+    <ol>
+        <li>スプレッドシートを開き「共有」ボタンをクリック</li>
+        <li>チームメンバーのGmailアドレスを追加</li>
+        <li>権限は「編集者」に設定</li>
+    </ol>
+</div>
+
+<h3>担当者の識別</h3>
+<p>スキャン時に「担当者」プルダウンから自分の名前を選択することで、スプレッドシートのO列に担当者名が記録されます。あとで担当者フィルタをかけることで、自分の担当案件だけを確認できます。</p>
+
+<!-- ============================================================ -->
+<h2 id="assignee">7. 担当者の管理</h2>
+
+<p>設定パネル（⚙️）の「担当者リスト」セクションでメンバーの追加・削除ができます。</p>
+
+<h3>担当者を追加する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-body">⚙️ 設定を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-body">「担当者リスト」の入力欄に名前を入力（例：山田 太郎）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-body">「追加」ボタンをクリック（またはEnterキー）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-body">「保存」して設定を閉じる</div></div>
+
+<p>登録した担当者はスキャン結果フォームの「担当者」プルダウンに表示されます。最後に選んだ担当者が次回のデフォルト値になります。</p>
+
+<div class="box box-tip">
+    💡 担当者リストはそのデバイスのローカル（localStorage）に保存されます。別のスマホでも使う場合は、それぞれの端末で設定してください。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="faq">8. よくある質問</h2>
+
+<h3>Q. スプレッドシートに書き込めない</h3>
+<p>以下を順番に確認してください：</p>
+<ol>
+    <li>「Googleで接続」ボタンを押して再認証（ページリロード後は必要）</li>
+    <li>「シート一覧を取得」でシートを再選択し「保存」</li>
+    <li>スプレッドシートの共有権限（編集者）があるか確認</li>
+</ol>
+
+<h3>Q. OCRの精度が悪い</h3>
+<ul>
+    <li>明るい場所で名刺全体が収まるよう撮影してください</li>
+    <li>折れ・反射・影がない状態で撮影するとより正確です</li>
+    <li>読み取れなかった項目は手動で修正してから登録してください</li>
+</ul>
+
+<h3>Q. 同じ人が重複して登録された</h3>
+<p>「まとめてシートに追加」を押すと重複チェックが走り、既存の登録と氏名（D列）が一致した場合にアラートが表示されます。重複を削除する場合はスプレッドシートで直接行を削除してください。</p>
+
+<h3>Q. アプリを最新版に更新したい</h3>
+<p>設定パネル（⚙️）の「🔄 アプリを最新版に更新」ボタンを押してください。設定はそのまま保持されます。</p>
+
+<h3>Q. 担当者リストを別の端末でも使いたい</h3>
+<p>担当者リストはアプリの設定をデバイス内に保存しているため、別端末では再設定が必要です。スキャン結果のCSVには担当者情報が含まれています。</p>
+
+<footer>
+    名刺スキャナー 社内マニュアル ｜ 最終更新: 2026年3月 ｜ <a href="https://chuwashan.github.io/biz_card_scanner/">アプリを開く</a>
+</footer>
+
+</body>
+</html>
